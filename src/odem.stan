@@ -27,7 +27,7 @@ transformed parameters {
   DO_tot[1] = DO_tot_init;
   dDOdt_tot[1] = 0;
   for(i in 2:d) {
-    dDOdt_tot[i] = -lambda[i] * DO_tot[i-1];
+    dDOdt_tot[i] = exp(-lambda[i]) * DO_tot[i-1];
     DO_tot[i] = DO_tot[i-1] + dDOdt_tot[i];
     //if(stratified) {
     //  DO_epi[i] = DO_epi[i-1] + dDOdt_epi[i];

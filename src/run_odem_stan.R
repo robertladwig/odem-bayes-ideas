@@ -1,10 +1,12 @@
+setwd('/home/robert/Projects/DSI/odem-bayes-ideas')
+
 library(tidyverse)
 
 oneyear <- 2008
 twoyear <- 2007:2008
 
 input <- readr::read_csv(
-  'odem/input.txt',
+  'inst/extdata/input.txt',
   col_names=c('datetime', 'thermocline_depth', 'temperature_epi', 'temperature_hypo', 'temperature_total', 'volume_total', 'volume_epi', 'volume_hypo', 'area_thermocline', 'area_surface', 'year', 'day_of_year', 'wind'),
   col_types=cols(datetime=col_datetime(), year=col_integer(), day_of_year=col_integer(), .default=col_double()))
 in1yr <- filter(input, year %in% oneyear)
@@ -21,7 +23,7 @@ ggplot(in2yr, aes(x=datetime, y=thermocline_depth)) +
 
 #  time stamp in the first row, then area weighted average total oxygen in the second row, area weighted average epilimnion oxygen in the third row, and area weighted average hypolimnion oxygen in the fourth row
 obs <- read.table(
-  'odem/observed.txt',
+  'inst/extdata/observed.txt',
   header=FALSE,
   sep=' ',
   as.is=TRUE) %>%
@@ -48,16 +50,17 @@ simdata <- tibble(
 )
 dummyinput <- list(
   lambda_mu_min = 0,
-  lambda_mu_max = 20,
+  lambda_mu_max = 5,
   lambda_sigma = 0.000001,
   err_sigma = 0.0003,
   d = nrow(simdata),
   ii_obs = which(simdata$have_obs == 1),
   DO_tot_init = simdata$DO_obs_tot_true[1])
+
 dummyinput$N_obs = length(dummyinput$ii_obs)
 dummyinput$DO_obs_tot = simdata$DO_obs_tot[dummyinput$ii_obs]
 
-fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 3, iter = 100)
+fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 4, iter = 10000)
 
 # an example of extracting parameters for this particular dummy model, i'm
 # geting an overestimate of lambda and consequently a much faster modeled drop
