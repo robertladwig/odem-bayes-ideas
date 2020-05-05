@@ -87,3 +87,4 @@ DO_tot <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$DO_tot %>%
   summarize(mean = mean(value), sd = sd(value))
 ggplot(DO_tot, aes(x=day, y=mean)) + geom_line() +
   geom_point(data=simdata, aes(x=day, y=DO_obs_tot))
+
