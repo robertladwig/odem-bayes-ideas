@@ -3,9 +3,15 @@ data {
   real<lower=0> NEP_mu_min;
   real<lower=0> NEP_mu_max;
   real<lower=0> NEP_sigma;
-  real<lower=0> SED_mu_min;
-  real<lower=0> SED_mu_max;
-  real<lower=0> SED_sigma;
+  real<lower=0> SED1_mu_min;
+  real<lower=0> SED1_mu_max;
+  real<lower=0> SED1_sigma;
+  real<lower=0> MIN_mu_min;
+  real<lower=0> MIN_mu_max;
+  real<lower=0> MIN_sigma;
+  real<lower=0> SED2_mu_min;
+  real<lower=0> SED2_mu_max;
+  real<lower=0> SED2_sigma;
 
   // Error distributions
   real<lower=0> err_sigma;
@@ -17,32 +23,68 @@ data {
 
   // Data
   real DO_epi_init; // need a starting point. this is one option.
+  real DO_hyp_init;
   real khalf;
-  real theta[d];
-  real volume[d];
-  real area[d];
+  real theta1[d];
+  real theta2[d];
+  real volume_epi[d];
+  real area_epi[d];
+  real volume_hyp[d];
+  real area_hyp[d];
   real k600[d];
   real o2sat[d];
   real tddepth[d];
   real DO_obs_epi[N_obs]; // how do we accept missing data? https://mc-stan.org/docs/2_23/stan-users-guide/sliced-missing-data.html
+  real DO_obs_hyp[N_obs];
 }
 parameters {
   real<lower=0> NEP_mu;
   real<lower=0> NEP[d];
-  real<lower=0> SED_mu;
-  real<lower=0> SED[d];
+  real<lower=0> SED1_mu;
+  real<lower=0> SED1[d];
+  real<lower=0> MIN_mu;
+  real<lower=0> MIN[d];
+  real<lower=0> SED2_mu;
+  real<lower=0> SED2[d];
 }
 transformed parameters {
   real DO_epi[d];
   real dDOdt_epi[d];
+  real DO_hyp[d];
+  real dDOdt_hyp[d];
+  real delvol_epi[d];
+  real delvol_hyp[d];
+  real x_do1[d];
+  real x_do2[d];
 
   DO_epi[1] = DO_epi_init;
+  DO_hyp[1] = DO_hyp_init;
   dDOdt_epi[1] = 0;
   for(i in 2:d) {
-    dDOdt_epi[i] = NEP[i-1] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta[i] -
-    SED[i-1] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta[i] * area[i-1]/volume[i-1] +
+    delvol_epi[i] = (volume_epi[i] -  volume_epi[i-1])/volume_epi[i-1];
+    if (delvol_epi[i] >= 0){
+      x_do1[i] = DO_hyp[i-1];
+    } else {
+      x_do1[i] = DO_epi[i-1];
+    }
+
+    delvol_hyp[i] = (volume_hyp[i] -  volume_hyp[i-1])/volume_hyp[i-1];
+    if (delvol_hyp[i] >= 0){
+      x_do2[i] = DO_epi[i-1];
+    } else {
+      x_do2[i] = DO_hyp[i-1];
+    }
+
+    dDOdt_epi[i] = NEP[i-1] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] -
+    SED1[i-1] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1] +
     k600[i-1] * (o2sat[d-1] - DO_epi[i-1])/tddepth[i-1];
-    DO_epi[i] =  (DO_epi[i-1] + dDOdt_epi[i]) * volume[i-1]/volume[i];
+    // delvol_epi[i-1] * x_do1[i-1];
+    DO_epi[i] =  (DO_epi[i-1] + dDOdt_epi[i]) * volume_epi[i-1]/volume_epi[i];
+
+    dDOdt_hyp[i] = MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] -
+    SED2[i-1] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1];
+    // delvol_hyp[i-1] * x_do2[i-1];
+    DO_hyp[i] =  (DO_hyp[i-1] + dDOdt_hyp[i]) * volume_hyp[i-1]/volume_hyp[i];
     //if(stratified) {
     //  DO_epi[i] = DO_epi[i-1] + dDOdt_epi[i];
     //  DO_hypo[i] = DO_hypo[i-1] + dDOdt_hypo[i];
@@ -55,11 +97,16 @@ transformed parameters {
 model {
   NEP_mu ~ uniform(NEP_mu_min, NEP_mu_max);
   NEP ~ normal(NEP_mu, NEP_sigma);
-  SED_mu ~ uniform(SED_mu_min, SED_mu_max);
-  SED ~ normal(SED_mu, SED_sigma);
+  SED1_mu ~ uniform(SED1_mu_min, SED1_mu_max);
+  SED1 ~ normal(SED1_mu, SED1_sigma);
+  MIN_mu ~ uniform(MIN_mu_min, MIN_mu_max);
+  MIN ~ normal(MIN_mu, MIN_sigma);
+  SED2_mu ~ uniform(SED2_mu_min, SED2_mu_max);
+  SED2 ~ normal(SED2_mu, SED2_sigma);
   for(i in 1:N_obs) {
    DO_obs_epi[i] ~ normal(DO_epi[ii_obs[N_obs]], err_sigma); //normal(DO_obs_epi[N_obs], err_sigma);//
    // DO_obs_epi[i] ~ normal(DO_obs_epi[N_obs], err_sigma);
+   DO_obs_hyp[i] ~ normal(DO_hyp[ii_obs[N_obs]], err_sigma);
   }
   //for(i in 1:N_obs_epi) {
   //  DO_obs_epi[i] ~ normal(DO_epi[ii_obs[N_obs]], err_sigma);

@@ -57,6 +57,7 @@ library(LakeMetabolizer)
 # we started with 10 days but I've played with 200 to get more "data"
 simdata <- tibble(
   DO_obs_epi = DO_obs_epi * 1000,
+  DO_obs_hyp = DO_obs_hyp * 1000,
   day = seq(1, length(in1yr$datetime))
   # DO_obs_tot_true = 10 * exp(-0.04*day) + rnorm(length(day), 0, 0.0002),
   # have_obs = ifelse(day == 1, 0, round(runif(10))),
@@ -66,25 +67,37 @@ dummyinput <- list(
   NEP_mu_min = 0,
   NEP_mu_max = 10000,
   NEP_sigma = 1000,#0.000001,
-  SED_mu_min = 0,
-  SED_mu_max = 1500,
-  SED_sigma = 5000,
-  theta = 1.08^(in1yr$temperature_epi - 20),
+  SED1_mu_min = 0,
+  SED1_mu_max = 1500,
+  SED1_sigma = 5000,
+  MIN_mu_min = 0,
+  MIN_mu_max = 10000,
+  MIN_sigma = 1000,#0.000001,
+  SED2_mu_min = 0,
+  SED2_mu_max = 1500,
+  SED2_sigma = 5000,
+  theta1 = 1.08^(in1yr$temperature_epi - 20),
+  theta2 = 1.08^(in1yr$temperature_hypo - 20),
   k600 = k600.2.kGAS.base(k.cole.base(in1yr$wind),temperature = in1yr$temperature_epi, gas = "O2"),
   o2sat = o2.at.sat.base(temp = in1yr$temperature_epi, altitude = 300) * 1000,
-  volume = in1yr$volume_epi,
-  area = in1yr$area_surface,
+  volume_epi = in1yr$volume_epi,
+  area_epi = in1yr$area_surface,
+  volume_hyp = in1yr$volume_hypo,
+  area_hyp = in1yr$area_thermocline,
   tddepth = in1yr$thermocline_depth,
   ii_obs = idx,
-  wtr = in1yr$temperature_epi,
+  wtr_epi = in1yr$temperature_epi,
+  wtr_hyp = in1yr$temperature_hypo,
   khalf = 3000,
   err_sigma = 0.0003,
   d = nrow(simdata),
-  DO_epi_init = 5 * 1000 #simdata$DO_obs[1],
+  DO_epi_init = 10 * 1000, #simdata$DO_obs[1],
+  DO_hyp_init = 10 * 1000
 )
 
 dummyinput$N_obs = length(dummyinput$DO_epi_init)
 dummyinput$DO_obs_epi = simdata$DO_obs_epi[idx]
+dummyinput$DO_obs_hyp = simdata$DO_obs_hyp[idx]
 dummyinput$N_obs = length(dummyinput$ii_obs)
 
 fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 4, iter = 1000)
@@ -103,7 +116,21 @@ NEP <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$NEP %>%
   tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
   group_by(day) %>%
   summarize(mean = mean(value), sd = sd(value))
-SED <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$SED %>%
+SED1 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$SED1 %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+MIN <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$MIN %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+SED2 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$SED2 %>%
   as_tibble() %>%
   mutate(iter = 1:n()) %>%
   pivot_longer(names_to='Vday', cols = -iter) %>%
@@ -112,9 +139,20 @@ SED <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$SED %>%
   summarize(mean = mean(value), sd = sd(value))
 ggplot(NEP, aes(x=day, y=mean, col = 'NEP')) + geom_line() +
   geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
-  geom_line(data = SED, aes(x=day, y=mean, col = 'SED')) +
-  geom_ribbon(data = SED, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) + theme_bw()
+  geom_line(data = SED1, aes(x=day, y=mean, col = 'SED1')) +
+  geom_ribbon(data = SED1, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = SED2, aes(x=day, y=mean, col = 'SED2')) +
+  geom_ribbon(data = SED2, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = MIN, aes(x=day, y=mean, col = 'MIN')) +
+  geom_ribbon(data = MIN, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) + theme_bw()
 DO_epi <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$DO_epi %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+DO_hyp <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$DO_hyp %>%
   as_tibble() %>%
   mutate(iter = 1:n()) %>%
   pivot_longer(names_to='Vday', cols = -iter) %>%
@@ -123,5 +161,8 @@ DO_epi <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$DO_epi %>%
   summarize(mean = mean(value), sd = sd(value))
 ggplot(DO_epi, aes(x=day, y=mean)) + geom_line() +
   geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
-  geom_point(data=simdata, aes(x=day, y=DO_obs))
+  geom_point(data=simdata, aes(x=day, y=DO_obs_epi, col = DO_obs_epi)) +
+  geom_line(data = DO_hyp, aes(x=day, y=mean)) +
+  geom_ribbon(data = DO_hyp, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_point(data=simdata, aes(x=day, y=DO_obs_hyp, col = DO_obs_hyp))
 
