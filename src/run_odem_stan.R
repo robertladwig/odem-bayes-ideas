@@ -164,5 +164,6 @@ ggplot(DO_epi, aes(x=day, y=mean)) + geom_line() +
   geom_point(data=simdata, aes(x=day, y=DO_obs_epi, col = DO_obs_epi)) +
   geom_line(data = DO_hyp, aes(x=day, y=mean)) +
   geom_ribbon(data = DO_hyp, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
-  geom_point(data=simdata, aes(x=day, y=DO_obs_hyp, col = DO_obs_hyp))
+  geom_point(data=simdata, aes(x=day, y=DO_obs_hyp, col = DO_obs_hyp)) +
+  ylim(c(0,15000))
 

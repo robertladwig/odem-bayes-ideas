@@ -38,13 +38,13 @@ data {
   real DO_obs_hyp[N_obs];
 }
 parameters {
-  real<lower=0> NEP_mu;
+  real<lower=0> NEP_mu[d];
   real<lower=0> NEP[d];
-  real<lower=0> SED1_mu;
+  real<lower=0> SED1_mu[d];
   real<lower=0> SED1[d];
-  real<lower=0> MIN_mu;
+  real<lower=0> MIN_mu[d];
   real<lower=0> MIN[d];
-  real<lower=0> SED2_mu;
+  real<lower=0> SED2_mu[d];
   real<lower=0> SED2[d];
 }
 transformed parameters {
@@ -60,6 +60,7 @@ transformed parameters {
   DO_epi[1] = DO_epi_init;
   DO_hyp[1] = DO_hyp_init;
   dDOdt_epi[1] = 0;
+  dDOdt_hyp[1] = 0;
   for(i in 2:d) {
     delvol_epi[i] = (volume_epi[i] -  volume_epi[i-1])/volume_epi[i-1];
     if (delvol_epi[i] >= 0){
@@ -81,7 +82,7 @@ transformed parameters {
     // delvol_epi[i-1] * x_do1[i-1];
     DO_epi[i] =  (DO_epi[i-1] + dDOdt_epi[i]) * volume_epi[i-1]/volume_epi[i];
 
-    dDOdt_hyp[i] = MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] -
+    dDOdt_hyp[i] =  - MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] -
     SED2[i-1] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1];
     // delvol_hyp[i-1] * x_do2[i-1];
     DO_hyp[i] =  (DO_hyp[i-1] + dDOdt_hyp[i]) * volume_hyp[i-1]/volume_hyp[i];
@@ -95,14 +96,24 @@ transformed parameters {
   }
 }
 model {
-  NEP_mu ~ uniform(NEP_mu_min, NEP_mu_max);
-  NEP ~ normal(NEP_mu, NEP_sigma);
-  SED1_mu ~ uniform(SED1_mu_min, SED1_mu_max);
-  SED1 ~ normal(SED1_mu, SED1_sigma);
-  MIN_mu ~ uniform(MIN_mu_min, MIN_mu_max);
-  MIN ~ normal(MIN_mu, MIN_sigma);
-  SED2_mu ~ uniform(SED2_mu_min, SED2_mu_max);
-  SED2 ~ normal(SED2_mu, SED2_sigma);
+  for (i in 1:d){
+    NEP_mu[i] ~ uniform(NEP_mu_min, NEP_mu_max);
+    NEP[i] ~ normal(NEP_mu, NEP_sigma);
+    SED1_mu[i] ~ uniform(SED1_mu_min, SED1_mu_max);
+    SED1[i] ~ normal(SED1_mu, SED1_sigma);
+    MIN_mu[i] ~ uniform(MIN_mu_min, MIN_mu_max);
+    MIN[i] ~ normal(MIN_mu, MIN_sigma);
+    SED2_mu[i] ~ uniform(SED2_mu_min, SED2_mu_max);
+    SED2[i] ~ normal(SED2_mu, SED2_sigma);
+  }
+  // NEP_mu ~ uniform(NEP_mu_min, NEP_mu_max);
+  // NEP ~ normal(NEP_mu, NEP_sigma);
+  // SED1_mu ~ uniform(SED1_mu_min, SED1_mu_max);
+  // SED1 ~ normal(SED1_mu, SED1_sigma);
+  // MIN_mu ~ uniform(MIN_mu_min, MIN_mu_max);
+  // MIN ~ normal(MIN_mu, MIN_sigma);
+  // SED2_mu ~ uniform(SED2_mu_min, SED2_mu_max);
+  // SED2 ~ normal(SED2_mu, SED2_sigma);
   for(i in 1:N_obs) {
    DO_obs_epi[i] ~ normal(DO_epi[ii_obs[N_obs]], err_sigma); //normal(DO_obs_epi[N_obs], err_sigma);//
    // DO_obs_epi[i] ~ normal(DO_obs_epi[N_obs], err_sigma);
