@@ -1,3 +1,6 @@
+cat('\f')
+rm(list= ls())
+
 setwd('/home/robert/Projects/DSI/odem-bayes-ideas')
 
 library(tidyverse)
@@ -52,11 +55,13 @@ DO_obs_epi = rep(NA, length(in1yr$datetime))
 DO_obs_epi[idx] = obs1yr$DO_epi[idz]
 DO_obs_hyp = rep(NA, length(in1yr$datetime))
 DO_obs_hyp[idx] = obs1yr$DO_hypo[idz]
+
 library(rstan)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 library(LakeMetabolizer)
 # we started with 10 days but I've played with 200 to get more "data"
+
 simdata <- tibble(
   DO_obs_epi = DO_obs_epi * 1000,
   DO_obs_hyp = DO_obs_hyp * 1000,
@@ -67,17 +72,17 @@ simdata <- tibble(
 )
 dummyinput <- list(
   NEP_mu_min = 0,
-  NEP_mu_max = 10000,
-  NEP_sigma = 1000,#0.000001,
+  NEP_mu_max = 0.5,#10000,
+  NEP_sigma = 1e-32, #1000,#0.000001,
   SED1_mu_min = 0,
-  SED1_mu_max = 1500,
-  SED1_sigma = 5000,
+  SED1_mu_max = 1,#1500,
+  SED1_sigma = 1e-32, #5000,
   MIN_mu_min = 0,
-  MIN_mu_max = 10000,
-  MIN_sigma = 1000,#0.000001,
+  MIN_mu_max = 1,#10000,
+  MIN_sigma = 1e-32, #1000,#0.000001,
   SED2_mu_min = 0,
-  SED2_mu_max = 1500,
-  SED2_sigma = 5000,
+  SED2_mu_max = 1,#1500,
+  SED2_sigma = 1e-32, #5000,
   theta1 = 1.08^(in1yr$temperature_epi - 20),
   theta2 = 1.08^(in1yr$temperature_hypo - 20),
   k600 = k600.2.kGAS.base(k.cole.base(in1yr$wind),temperature = in1yr$temperature_epi, gas = "O2"),
@@ -102,7 +107,7 @@ dummyinput$DO_obs_epi = simdata$DO_obs_epi[idx]
 dummyinput$DO_obs_hyp = simdata$DO_obs_hyp[idx]
 dummyinput$N_obs = length(dummyinput$ii_obs)
 
-fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 4, iter = 1000)
+fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 3, iter = 500)
 
 # an example of extracting parameters for this particular dummy model, i'm
 # geting an overestimate of lambda and consequently a much faster modeled drop
@@ -169,3 +174,73 @@ ggplot(DO_epi, aes(x=day, y=mean)) + geom_line(col = 'red') +
   geom_point(data=simdata, aes(x=day, y=DO_obs_hyp),col ='green') +
   ylim(c(0,15000))
 
+Fnep <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Fnep %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+Fatm <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Fatm %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+Fsed1 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Fsed1 %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+Fmin <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Fmin %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+Fsed2 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Fsed2 %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+ggplot(Fnep, aes(x=day, y=mean, col = 'NEP')) + geom_line() +
+  geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = Fsed1, aes(x=day, y=mean, col = 'SED1')) +
+  geom_ribbon(data = Fsed1, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = Fatm, aes(x=day, y=mean, col = 'ATM')) +
+  geom_ribbon(data = Fatm, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = DO_epi, aes(x=day, y=mean, col = 'epi')) + geom_line() +
+  geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) + theme_bw()
+
+ggplot(Fsed2, aes(x=day, y=mean, col = 'SED2')) + geom_line() +
+  geom_ribbon(data = Fsed2, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = Fmin, aes(x=day, y=mean, col = 'MIN')) +
+  geom_ribbon(data = Fmin, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = DO_hyp, aes(x=day, y=mean, col = 'hyp')) + geom_line() +
+  geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) + theme_bw()
+
+Fepi <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$flux_epi %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+Fhyp <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$flux_hyp %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+
+ggplot(Fepi, aes(x=day, y=mean, col = 'Fepi')) + geom_line() +
+  geom_ribbon(data = Fepi, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = Fhyp, aes(x=day, y=mean, col = 'Fhyp')) +
+  geom_ribbon(data = Fhyp, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) + theme_bw()
