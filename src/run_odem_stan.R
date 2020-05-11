@@ -53,6 +53,8 @@ DO_obs_epi[idx] = obs1yr$DO_epi[idz]
 DO_obs_hyp = rep(NA, length(in1yr$datetime))
 DO_obs_hyp[idx] = obs1yr$DO_hypo[idz]
 library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
 library(LakeMetabolizer)
 # we started with 10 days but I've played with 200 to get more "data"
 simdata <- tibble(
