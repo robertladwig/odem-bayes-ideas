@@ -53,6 +53,8 @@ DO_obs_epi[idx] = obs1yr$DO_epi[idz]
 DO_obs_hyp = rep(NA, length(in1yr$datetime))
 DO_obs_hyp[idx] = obs1yr$DO_hypo[idz]
 library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
 library(LakeMetabolizer)
 # we started with 10 days but I've played with 200 to get more "data"
 simdata <- tibble(
@@ -159,11 +161,11 @@ DO_hyp <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$DO_hyp %>%
   tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
   group_by(day) %>%
   summarize(mean = mean(value), sd = sd(value))
-ggplot(DO_epi, aes(x=day, y=mean)) + geom_line() +
+ggplot(DO_epi, aes(x=day, y=mean)) + geom_line(col = 'red') +
   geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
-  geom_point(data=simdata, aes(x=day, y=DO_obs_epi, col = DO_obs_epi)) +
-  geom_line(data = DO_hyp, aes(x=day, y=mean)) +
+  geom_point(data=simdata, aes(x=day, y=DO_obs_epi), col ='red') +
+  geom_line(data = DO_hyp, aes(x=day, y=mean), col = 'green') +
   geom_ribbon(data = DO_hyp, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
-  geom_point(data=simdata, aes(x=day, y=DO_obs_hyp, col = DO_obs_hyp)) +
+  geom_point(data=simdata, aes(x=day, y=DO_obs_hyp),col ='green') +
   ylim(c(0,15000))
 
