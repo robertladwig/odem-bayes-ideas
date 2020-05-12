@@ -95,7 +95,7 @@ dummyinput <- list(
   ii_obs = idx,
   wtr_epi = in1yr$temperature_epi,
   wtr_hyp = in1yr$temperature_hypo,
-  khalf = 3000,
+  khalf = 500, # New, was 3000
   err_sigma = 0.0003,
   d = nrow(simdata),
   DO_epi_init = 10 * 1000, #simdata$DO_obs[1],
@@ -107,7 +107,7 @@ dummyinput$DO_obs_epi = simdata$DO_obs_epi[idx]
 dummyinput$DO_obs_hyp = simdata$DO_obs_hyp[idx]
 dummyinput$N_obs = length(dummyinput$ii_obs)
 
-fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 3, iter = 500)
+fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 3, iter = 500,control=list(adapt_delta = 0.8))
 
 # an example of extracting parameters for this particular dummy model, i'm
 # geting an overestimate of lambda and consequently a much faster modeled drop
@@ -174,6 +174,20 @@ ggplot(DO_epi, aes(x=day, y=mean)) + geom_line(col = 'red') +
   geom_point(data=simdata, aes(x=day, y=DO_obs_hyp),col ='green') +
   ylim(c(0,15000))
 
+Ftotepi <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Ftotepi %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+Ftotepi2 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Ftotepi2 %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
 Fnep <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Fnep %>%
   as_tibble() %>%
   mutate(iter = 1:n()) %>%
