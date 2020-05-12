@@ -69,9 +69,9 @@ transformed parameters {
   x_do2[1] = 0; // new
   delvol_epi[1] = 0; // new
   delvol_hyp[1] = 0; // new
-  
+
   for(i in 2:d) {
-    
+
     delvol_epi[i] = (volume_epi[i] -  volume_epi[i-1])/volume_epi[i-1];
     if (delvol_epi[i] >= 0){
       x_do1[i] = DO_hyp[i-1];
@@ -85,16 +85,16 @@ transformed parameters {
     } else {
       x_do2[i] = DO_hyp[i-1];
     }
-    
+
     // FluxAtm multiplied by 0.1 to help fits
     dDOdt_epi[i] = NEP[i-1] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] -
     SED1[i-1] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1] +
-    k600[i-1] * 0.1 * (o2sat[d-1] - DO_epi[i-1])/tddepth[i-1] + 
+    k600[i-1] * 0.1 * (o2sat[d-1] - DO_epi[i-1])/tddepth[i-1] +
     delvol_epi[i] * x_do1[i]; // New was i-1
 
     if(abs(dDOdt_epi[i])>abs(DO_epi[i-1])){
       if(dDOdt_epi[i] < 0){
-        flux_epi[i] = - DO_epi[i-1]; 
+        flux_epi[i] = - DO_epi[i-1];
       }else{
          flux_epi[i] = dDOdt_epi[i];
       }
@@ -107,7 +107,7 @@ transformed parameters {
     dDOdt_hyp[i] =  - MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] -
     SED2[i-1] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1] +
     delvol_hyp[i] * x_do2[i]; // New, was i-1
-    
+
     if(abs(dDOdt_hyp[i])>abs(DO_hyp[i-1])){
       if(dDOdt_hyp[i] < 0){
         flux_hyp[i] = - DO_hyp[i-1];
@@ -116,7 +116,7 @@ transformed parameters {
       }
     }else{
       flux_hyp[i] = dDOdt_hyp[i];
-    } 
+    }
 
     DO_hyp[i] =  (DO_hyp[i-1] + flux_hyp[i])* volume_hyp[i-1]/volume_hyp[i];
 
@@ -132,13 +132,13 @@ model {
   // MIN ~ normal(2000, 1);
   // SED2_mu ~ uniform(SED2_mu_min, SED2_mu_max);
   // SED2 ~ normal(1000, 1);
-  
-  //for(i in 1:d) {
-  	//NEP[i] ~ normal(10,1);
-  	//MIN[i] ~ normal(3000,10);
-  	//SED1[i] ~ normal(5000,10);
-  	//SED2[i] ~ normal(3000,10); 
-  //}
+
+  for(i in 2:d) {
+    NEP[i] ~ normal(NEP[i-1],1);
+    MIN[i] ~ normal(MIN[i-1],10);
+    SED1[i] ~ normal(SED1[i-1],10);
+    SED2[i] ~ normal(SED2[i-1],10);
+  }
 
   for(i in 1:N_obs) {
    NEP[ii_obs[i]] ~ normal(10,1);
@@ -148,7 +148,7 @@ model {
    DO_obs_epi[i] ~ normal(DO_epi[ii_obs[i]], 10); // error in "i", sigma of 1 way too low
    DO_obs_hyp[i] ~ normal(DO_hyp[ii_obs[i]], 10); // error in "i", sigma of 1 way too low
   }
-  
+
 }
 generated quantities {
   real Fnep[d];
@@ -176,5 +176,5 @@ generated quantities {
     Fmin[i] =  - MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i];
     Fsed2[i] = -SED2[i-1] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1];
   }
-  
+
 }

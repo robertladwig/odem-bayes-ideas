@@ -43,7 +43,7 @@ ggplot(obs, aes(x=date)) +
   geom_line(aes(y=DO_hypo), color='navy') +
   theme_bw()
 
-
+#
 idx1 = which(!is.na(in1yr$thermocline_depth))[1]
 idx2 = rev(which(!is.na(in1yr$thermocline_depth)))[1]
 in1yr = in1yr[idx1:idx2,]
@@ -144,6 +144,20 @@ SED2 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$SED2 %>%
   tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
   group_by(day) %>%
   summarize(mean = mean(value), sd = sd(value))
+ENTR1 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Fentrain_epi %>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
+ENTR2 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Fentrain_hyp%>%
+  as_tibble() %>%
+  mutate(iter = 1:n()) %>%
+  pivot_longer(names_to='Vday', cols = -iter) %>%
+  tidyr::extract(Vday, into='day', regex='V([[:digit:]]+)', convert=TRUE) %>%
+  group_by(day) %>%
+  summarize(mean = mean(value), sd = sd(value))
 ggplot(NEP, aes(x=day, y=mean, col = 'NEP')) + geom_line() +
   geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
   geom_line(data = SED1, aes(x=day, y=mean, col = 'SED1')) +
@@ -151,7 +165,12 @@ ggplot(NEP, aes(x=day, y=mean, col = 'NEP')) + geom_line() +
   geom_line(data = SED2, aes(x=day, y=mean, col = 'SED2')) +
   geom_ribbon(data = SED2, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
   geom_line(data = MIN, aes(x=day, y=mean, col = 'MIN')) +
-  geom_ribbon(data = MIN, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) + theme_bw()
+  geom_ribbon(data = MIN, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2)
+  geom_line(data = ENTR1, aes(x=day, y=mean, col = 'ENTR1')) +
+  geom_ribbon(data = ENTR1, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_line(data = ENTR2, aes(x=day, y=mean, col = 'ENTR2')) +
+  geom_ribbon(data = ENTR2, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2)+ theme_bw()
+
 DO_epi <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$DO_epi %>%
   as_tibble() %>%
   mutate(iter = 1:n()) %>%
