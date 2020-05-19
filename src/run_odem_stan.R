@@ -44,10 +44,19 @@ ggplot(obs, aes(x=date)) +
   theme_bw()
 
 #
+in1yr= in2yr
+obs1yr = obs2yr
+
 idx1 = which(!is.na(in1yr$thermocline_depth))[1]
 idx2 = rev(which(!is.na(in1yr$thermocline_depth)))[1]
 in1yr = in1yr #[idx1:idx2,]
 in1yr$strat <- ifelse(is.na(in1yr$thermocline_depth),0,1)
+strat.pos <- c()
+for (ii in 1:length(in1yr$strat)){
+  if (in1yr$strat[ii] == 1 && in1yr$strat[ii-1] == 0){
+    strat.pos <- append(strat.pos, ii)
+  }
+}
 
 idy = match(obs1yr$date,zoo::as.Date(in1yr$datetime))
 # idx = idy[!is.na(idy)]
@@ -118,7 +127,10 @@ dummyinput <- list(
   DO_epi_init = 10 * 1000, #simdata$DO_obs[1],
   DO_hyp_init = 10 * 1000,
   DO_tot_init = 10 * 1000,
-  stratified = in1yr$strat
+  stratified = in1yr$strat,
+  strat_pos = strat.pos,
+  len_strat_pos = length(strat.pos),
+  d_strat_pos = length(strat.pos)
 )
 
 dummyinput$DO_obs_epi = simdata$DO_obs_epi[idxx]
@@ -127,7 +139,7 @@ dummyinput$DO_obs_tot = simdata$DO_obs_tot[idx]
 dummyinput$N_obs = length(dummyinput$ii_obs)
 dummyinput$N_obs_mix = length(idx)
 
-fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 1, iter = 500,control=list(adapt_delta = 0.8))
+fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 3, iter = 1000,control=list(adapt_delta = 0.8))
 
 # an example of extracting parameters for this particular dummy model, i'm
 # geting an overestimate of lambda and consequently a much faster modeled drop
@@ -166,13 +178,13 @@ SED2 <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$SED2 %>%
   summarize(mean = mean(value), sd = sd(value))
 
 ggplot(NEP, aes(x=day, y=mean, col = 'NEP')) + geom_line() +
-  geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_ribbon(aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd, col = 'NEP'), alpha=0.2) +
   geom_line(data = SED1, aes(x=day, y=mean, col = 'SED1')) +
-  geom_ribbon(data = SED1, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_ribbon(data = SED1, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd, col = 'SED1'), alpha=0.2) +
   geom_line(data = SED2, aes(x=day, y=mean, col = 'SED2')) +
-  geom_ribbon(data = SED2, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
+  geom_ribbon(data = SED2, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd, col = 'SED2'), alpha=0.2) +
   geom_line(data = MIN, aes(x=day, y=mean, col = 'MIN')) +
-  geom_ribbon(data = MIN, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) + theme_bw()
+  geom_ribbon(data = MIN, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd, col = 'MIN'), alpha=0.2) + theme_bw()
 
 DO_epi <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$DO_epi %>%
   as_tibble() %>%

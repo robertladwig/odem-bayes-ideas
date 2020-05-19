@@ -22,6 +22,7 @@ data {
   int N_obs_mix;
   int<lower=1, upper=d> ii_obs[N_obs];
   int<lower=1, upper=d> ii_obs_mix[N_obs_mix];
+  int<lower=1> d_strat_pos;
 
   // Data
   real DO_epi_init; // need a starting point. this is one option.
@@ -45,15 +46,17 @@ data {
   real DO_obs_hyp[N_obs];
   real DO_obs_tot[N_obs_mix];
   real stratified[d];
+  real strat_pos[d_strat_pos];
+  int len_strat_pos;
 }
 parameters {
-  real<lower=0> NEP_mu;
+  //real<lower=0> NEP_mu;
   real<lower=0, upper = 100> NEP[d];
-  real<lower=0> SED1_mu;
+  //real<lower=0> SED1_mu;
   real<lower=0, upper=3200> SED1[d];
-  real<lower=0> MIN_mu;
+  //real<lower=0> MIN_mu;
   real<lower=0, upper=1000> MIN[d];
-  real<lower=0> SED2_mu;
+  //real<lower=0> SED2_mu;
   real<lower=0, upper=3200> SED2[d];
 }
 transformed parameters {
@@ -70,6 +73,7 @@ transformed parameters {
   real delvol_hyp[d];
   real x_do1[d];
   real x_do2[d];
+  real first_day;
 
   DO_epi[1] = DO_epi_init;
   DO_hyp[1] = DO_hyp_init;
@@ -84,14 +88,24 @@ transformed parameters {
   x_do2[1] = 0; // new
   delvol_epi[1] = 0; // new
   delvol_hyp[1] = 0; // new
+  first_day = 0;
 
   for(i in 2:d) {
+  // print("i-1: ",i," Epi: ",DO_epi[i-1]," Hypo: ",DO_hyp[i-1],", DO_tot: ",DO_tot[i-1]);
+
+  first_day = 0;
+  for (k in 1:len_strat_pos){
+    if (strat_pos[k] == i){
+      first_day = 1;
+    }
+  }
 
   if (stratified[i] == 0) {
+    // The transition back to mixed in fall MIGHT still have a bug
 
     dDOdt_tot[i] = NEP[i-1] * (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i] -
     SED1[i-1] *  (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i] * area_epi[i-1]/volume_tot[i-1] +
-    k600t[i-1] * (o2satt[d-1] - DO_tot[i-1])/25. -
+    k600t[i-1]  *  (o2satt[d-1] - DO_tot[i-1])  * area_epi[i-1]/volume_tot[i-1] - ///25. -
     MIN[i-1] * (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i];
 
     if(fabs(dDOdt_tot[i])>fabs(DO_tot[i-1])){
@@ -101,7 +115,7 @@ transformed parameters {
          flux_tot[i] = dDOdt_tot[i];
       }
     }else{
-      flux_tot[i] = DO_tot[i];
+      flux_tot[i] = dDOdt_tot[i]; // This was... DO_tot[i];
     }
 
     DO_tot[i] =  (DO_tot[i-1] + flux_tot[i]) * volume_tot[i-1]/volume_tot[i];
@@ -119,25 +133,41 @@ transformed parameters {
 
   } else if (stratified[i] == 1){
 
-    delvol_epi[i] = (volume_epi[i] -  volume_epi[i-1])/volume_epi[i-1];
+	// New kludge by Paul
+	if(first_day == 1){
+		delvol_epi[i] = 0;
+	} else {
+		delvol_epi[i] = (volume_epi[i] -  volume_epi[i-1])/volume_epi[i-1];
+	}
+
     if (delvol_epi[i] >= 0){
       x_do1[i] = DO_hyp[i-1];
     } else {
       x_do1[i] = DO_epi[i-1];
     }
 
-    delvol_hyp[i] = (volume_hyp[i] -  volume_hyp[i-1])/volume_hyp[i-1];
+	// New kludge by Paul
+	if(first_day == 1){
+		delvol_hyp[i] = 0;
+	} else {
+	    delvol_hyp[i] = (volume_hyp[i] -  volume_hyp[i-1])/volume_hyp[i-1];
+	}
     if (delvol_hyp[i] >= 0){
       x_do2[i] = DO_epi[i-1];
     } else {
       x_do2[i] = DO_hyp[i-1];
     }
 
-    // FluxAtm multiplied by 0.1 to help fits
-    dDOdt_epi[i] = NEP[i-1] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] -
-    SED1[i-1] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1] +
-    k600[i-1] * (o2sat[d-1] - DO_epi[i-1])/tddepth[i-1] +
-    delvol_epi[i] * x_do1[i]; // New was i-1
+    if(first_day == 1){
+    	dDOdt_epi[i]=0;
+    } else {
+        // FluxAtm multiplied by 0.1 to help fits
+        // Kludge reinserted
+    	dDOdt_epi[i] = NEP[i-1] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] -
+    	SED1[i-1] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1] +
+    	k600[i-1] *  (o2sat[d-1] - DO_epi[i-1]) * area_epi[i-1]/volume_epi[i-1] +// /tddepth[i] +
+    	delvol_epi[i] * x_do1[i]; // New was i-1; New: tddepth was at i-1, changed to i
+    }
 
     if(fabs(dDOdt_epi[i])>fabs(DO_epi[i-1])){
       if(dDOdt_epi[i] < 0){
@@ -149,11 +179,20 @@ transformed parameters {
       flux_epi[i] = dDOdt_epi[i];
     }
 
-    DO_epi[i] =  (DO_epi[i-1] + flux_epi[i]) * volume_epi[i-1]/volume_epi[i];
+	// New kludge by Paul
+	if(first_day == 1) {
+		DO_epi[i] = DO_epi[i-1];
+	} else {
+	    DO_epi[i] =  (DO_epi[i-1] + flux_epi[i]) * volume_epi[i-1]/volume_epi[i];
+	}
 
-    dDOdt_hyp[i] =  - MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] -
-    SED2[i-1] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1] +
-    delvol_hyp[i] * x_do2[i]; // New, was i-1
+	if(first_day == 1) {
+		dDOdt_hyp[i] = 0;
+	} else {
+	    dDOdt_hyp[i] =  - MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] -
+    	SED2[i-1] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1] +
+    	delvol_hyp[i] * x_do2[i]; // New, was i-1
+	}
 
     if(fabs(dDOdt_hyp[i])>fabs(DO_hyp[i-1])){
       if(dDOdt_hyp[i] < 0){
@@ -165,14 +204,19 @@ transformed parameters {
       flux_hyp[i] = dDOdt_hyp[i];
     }
 
-    DO_hyp[i] =  (DO_hyp[i-1] + flux_hyp[i])* volume_hyp[i-1]/volume_hyp[i];
+    // New kludge by Paul
+	if(first_day == 1) {
+		DO_hyp[i] = DO_hyp[i-1];
+	} else {
+	    DO_hyp[i] =  (DO_hyp[i-1] + flux_hyp[i])* volume_hyp[i-1]/volume_hyp[i];
+	}
 
+    // I do not understand this set of calculations for total DO
     dDOdt_tot[i] = dDOdt_epi[i];
-    DO_tot[i] = (DO_epi[i-1] + DO_hyp[i-1] ) * volume_tot[i-1]/volume_tot[i];
+    DO_tot[i] = (DO_epi[i-1] *volume_epi[i-1] + DO_hyp[i-1] *volume_hyp[i-1])/volume_tot[i];
     flux_tot[i] = flux_epi[i];
 
     }
-
 
   }
 }
@@ -195,12 +239,12 @@ model {
   }
 
   for(i in 1:N_obs) {
-   // NEP[ii_obs[i]] ~ normal(100,1);
-   // MIN[ii_obs[i]] ~ normal(3000,100);
-   // SED1[ii_obs[i]] ~ normal(3000,100);
-   // SED2[ii_obs[i]] ~ normal(3000,100);
+   //NEP[ii_obs[i]] ~ normal(100,1);
+   //MIN[ii_obs[i]] ~ normal(3000,100);
+   //SED1[ii_obs[i]] ~ normal(3000,100);
+   //SED2[ii_obs[i]] ~ normal(3000,100);
    DO_obs_epi[i] ~ normal(DO_epi[ii_obs[i]], 10); // error in "i", sigma of 1 way too low
-   DO_obs_hyp[i] ~ normal(D_Ohyp[ii_obs[i]], 10); // error in "i", sigma of 1 way too low
+   DO_obs_hyp[i] ~ normal(DO_hyp[ii_obs[i]], 10); // error in "i", sigma of 1 way too low
   }
 
   for(i in 1:N_obs_mix) {
