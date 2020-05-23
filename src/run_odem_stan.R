@@ -1,12 +1,13 @@
 cat('\f')
 rm(list= ls())
 
-setwd('/home/robert/Projects/DSI/odem-bayes-ideas')
+setwd('/Users/paul/Dropbox/Hanson/MyModels/ODEMPCH/odem-bayes-ideas-threelayer')
 
 library(tidyverse)
 
 oneyear <- 2008
 twoyear <- 2007:2008
+fiveyear <- 2000:2014
 
 input <- readr::read_csv(
   'inst/extdata/input.txt',
@@ -14,6 +15,7 @@ input <- readr::read_csv(
   col_types=cols(datetime=col_datetime(), year=col_integer(), day_of_year=col_integer(), .default=col_double()))
 in1yr <- filter(input, year %in% oneyear)
 in2yr <- filter(input, year %in% twoyear)
+in5yr <- filter(input, year %in% fiveyear)
 
 ggplot(in2yr, aes(x=datetime)) +
   geom_line(aes(y=temperature_epi), color='seagreen') +
@@ -37,6 +39,7 @@ obs <- read.table(
   select(date, everything())
 obs1yr <- filter(obs, lubridate::year(date) %in% oneyear)
 obs2yr <- filter(obs, lubridate::year(date) %in% twoyear)
+obs5yr <- filter(obs, lubridate::year(date) %in% fiveyear)
 ggplot(obs, aes(x=date)) +
   geom_line(aes(y=DO_tot), color='black') +
   geom_line(aes(y=DO_epi), color='seagreen') +
@@ -44,8 +47,10 @@ ggplot(obs, aes(x=date)) +
   theme_bw()
 
 #
-in1yr= in2yr
-obs1yr = obs2yr
+# in1yr= in2yr
+# obs1yr = obs2yr
+in1yr= in5yr
+obs1yr = obs5yr
 
 idx1 = which(!is.na(in1yr$thermocline_depth))[1]
 idx2 = rev(which(!is.na(in1yr$thermocline_depth)))[1]
@@ -90,6 +95,28 @@ simdata <- tibble(
   # have_obs = ifelse(day == 1, 0, round(runif(10))),
   # DO_obs_tot = ifelse(have_obs == 1, DO_obs_tot_true, NA)
 )
+##################
+# New code by Paul
+# Create a vector of length d that says which parameter (SED1, SED2, MIN, NEP) value to use
+# Assume there's one parameter value per observational data point
+# Break into chunks that change every time there's a parameter
+# Values in the vector indicate the index of the parameter value to use
+# Only change WhenToEstimateParams
+# WhenToEstimateParams = idxx # In this case, every time there's observed data
+# WhenToEstimateParams = c(150,250,550,650) # About twice per stratified season
+# WhenToEstimateParams = c(225,600) # About twice per stratified season
+WhenToEstimateParams = sort(c(idxx, idx,strat.pos))
+
+nParamEstimates = length(WhenToEstimateParams)
+ParamIndex = rep(nParamEstimates,nrow(simdata))
+ParamIndex[1:WhenToEstimateParams[1]-1] = 1 # use the first parameter value
+for (i in 2:nParamEstimates){
+  iCurrent = WhenToEstimateParams[i-1]:(WhenToEstimateParams[i]-1)
+  ParamIndex[iCurrent] = i
+}
+# End new code
+##################
+
 dummyinput <- list(
   NEP_mu_min = 0,
   NEP_mu_max = 0.5,#10000,
@@ -130,16 +157,21 @@ dummyinput <- list(
   stratified = in1yr$strat,
   strat_pos = strat.pos,
   len_strat_pos = length(strat.pos),
-  d_strat_pos = length(strat.pos)
+  d_strat_pos = length(strat.pos),
+  ##################
+  # New code by Paul
+  i_Param = ParamIndex,  # n_ParamEst indeces within d
+  n_ParamEst = nParamEstimates # number of times params are estimated
 )
 
+# simdata$DO_obs_epi = simdata$DO_obs_epi * 1.5
 dummyinput$DO_obs_epi = simdata$DO_obs_epi[idxx]
 dummyinput$DO_obs_hyp = simdata$DO_obs_hyp[idxx]
 dummyinput$DO_obs_tot = simdata$DO_obs_tot[idx]
 dummyinput$N_obs = length(dummyinput$ii_obs)
 dummyinput$N_obs_mix = length(idx)
 
-fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 3, iter = 1000,control=list(adapt_delta = 0.8))
+fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 1, iter = 500,control=list(adapt_delta = 0.8))
 
 # an example of extracting parameters for this particular dummy model, i'm
 # geting an overestimate of lambda and consequently a much faster modeled drop
@@ -206,7 +238,8 @@ ggplot(DO_epi, aes(x=day, y=mean)) + geom_line(col = 'red') +
   geom_line(data = DO_hyp, aes(x=day, y=mean), col = 'green') +
   geom_ribbon(data = DO_hyp, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
   geom_point(data=simdata, aes(x=day, y=DO_obs_hyp),col ='green') +
-  ylim(c(0,15000))
+  geom_point(data=simdata, aes(x=day, y=DO_obs_tot),col ='blue') +
+  ylim(c(0,20000))
 
 Ftotepi <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Ftotepi %>%
   as_tibble() %>%
@@ -310,3 +343,23 @@ ggplot(Fepi, aes(x=day, y=mean, col = 'Fepi')) + geom_line() +
   geom_ribbon(data = Fepi, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
   geom_line(data = Fhyp, aes(x=day, y=mean, col = 'Fhyp')) +
   geom_ribbon(data = Fhyp, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) + theme_bw()
+
+# Paul's new code to look at parameters
+plot(idxx, SED1$mean, type = 'l')
+points(idxx,SED1$mean[idxx])
+
+##################
+# New code by Paul
+# Plot atmospheric flux
+# The O2 deficit is saturation - modeled, so if modeled>sat, the value is negative
+# Scaler adjusts the deficit so that it can be viewed on the same y axis
+Scaler = 1/8
+o2sat = o2.at.sat.base(temp = in1yr$temperature_epi, altitude = 300) * 1000
+o2def = (o2sat - DO_epi$mean) * Scaler
+o2defObs = (o2sat - simdata$DO_obs_epi) * Scaler
+plot(Fatm$mean,type='l',ylim=c(-500,500),
+     xlab='Day of sim',main="")
+legend('topright',col=c('black','red','blue'),lty=c(1,1,1),c('Modeled Fatm','Modeled O2 def scaled','Observed O2 def'))
+lines(o2def,col='red')
+points(o2defObs,col='blue')
+abline(h=0)

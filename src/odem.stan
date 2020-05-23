@@ -23,6 +23,8 @@ data {
   int<lower=1, upper=d> ii_obs[N_obs];
   int<lower=1, upper=d> ii_obs_mix[N_obs_mix];
   int<lower=1> d_strat_pos;
+  int<lower=1> i_Param[d]; // New Paul
+  int<lower=1> n_ParamEst; // New Paul
 
   // Data
   real DO_epi_init; // need a starting point. this is one option.
@@ -51,13 +53,13 @@ data {
 }
 parameters {
   //real<lower=0> NEP_mu;
-  real<lower=0, upper = 100> NEP[d];
+  real<lower=0, upper = 1000> NEP[n_ParamEst];
   //real<lower=0> SED1_mu;
-  real<lower=0, upper=3200> SED1[d];
+  real<lower=0, upper=400> SED1[n_ParamEst];
   //real<lower=0> MIN_mu;
-  real<lower=0, upper=1000> MIN[d];
+  real<lower=0, upper=3000> MIN[n_ParamEst];
   //real<lower=0> SED2_mu;
-  real<lower=0, upper=3200> SED2[d];
+  real<lower=0, upper=3200> SED2[n_ParamEst];
 }
 transformed parameters {
   real DO_epi[d];
@@ -92,7 +94,7 @@ transformed parameters {
 
   for(i in 2:d) {
   // print("i-1: ",i," Epi: ",DO_epi[i-1]," Hypo: ",DO_hyp[i-1],", DO_tot: ",DO_tot[i-1]);
-
+  
   first_day = 0;
   for (k in 1:len_strat_pos){
     if (strat_pos[k] == i){
@@ -103,10 +105,10 @@ transformed parameters {
   if (stratified[i] == 0) {
     // The transition back to mixed in fall MIGHT still have a bug
 
-    dDOdt_tot[i] = NEP[i-1] * (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i] -
-    SED1[i-1] *  (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i] * area_epi[i-1]/volume_tot[i-1] +
-    k600t[i-1]  *  (o2satt[d-1] - DO_tot[i-1])  * area_epi[i-1]/volume_tot[i-1] - ///25. -
-    MIN[i-1] * (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i];
+    dDOdt_tot[i] = NEP[i_Param[i]] * (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i] -
+    SED1[i_Param[i]] *  (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i] * area_epi[i-1]/volume_tot[i-1] +
+    k600t[i-1]  *  (o2satt[i-1] - DO_tot[i-1])  * area_epi[i-1]/volume_tot[i-1] - ///25. -
+    MIN[i_Param[i]] * (DO_tot[i-1]/(khalf + DO_tot[i-1])) * theta0[i];
 
     if(fabs(dDOdt_tot[i])>fabs(DO_tot[i-1])){
       if(dDOdt_tot[i] < 0){
@@ -163,9 +165,9 @@ transformed parameters {
     } else {
         // FluxAtm multiplied by 0.1 to help fits
         // Kludge reinserted
-    	dDOdt_epi[i] = NEP[i-1] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] -
-    	SED1[i-1] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1] +
-    	k600[i-1] *  (o2sat[d-1] - DO_epi[i-1]) * area_epi[i-1]/volume_epi[i-1] +// /tddepth[i] +
+    	dDOdt_epi[i] = NEP[i_Param[i]] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] -
+    	SED1[i_Param[i]] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1] +
+    	k600[i-1] *  (o2sat[i-1] - DO_epi[i-1]) * area_epi[i-1]/volume_epi[i-1] +    // /tddepth[i] +
     	delvol_epi[i] * x_do1[i]; // New was i-1; New: tddepth was at i-1, changed to i
     }
 
@@ -189,8 +191,8 @@ transformed parameters {
 	if(first_day == 1) {
 		dDOdt_hyp[i] = 0;
 	} else {
-	    dDOdt_hyp[i] =  - MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] -
-    	SED2[i-1] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1] +
+	    dDOdt_hyp[i] =  - MIN[i_Param[i]] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] -
+    	SED2[i_Param[i]] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1] +
     	delvol_hyp[i] * x_do2[i]; // New, was i-1
 	}
 
@@ -230,27 +232,26 @@ model {
   // MIN ~ normal(2000, 1);
   // SED2_mu ~ uniform(SED2_mu_min, SED2_mu_max);
   // SED2 ~ normal(1000, 1);
-
-  for(i in 2:d) {
-    NEP[i] ~ normal(NEP[i-1],1);
-    MIN[i] ~ normal(MIN[i-1],100);
-    SED1[i] ~ normal(SED1[i-1],100);
-    SED2[i] ~ normal(SED2[i-1],100);
+ 
+  for(i in 1:n_ParamEst){
+   if (i==1){
+      NEP[i] ~ normal(500,100); // Use i+1 because initial value is the first in the vector
+   	  MIN[i] ~ normal(3000,100);
+      SED1[i] ~ normal(200,10);
+      SED2[i] ~ normal(3000,100);
+   } else {
+      NEP[i] ~ normal(NEP[i-1],10); // Use i+1 because initial value is the first in the vector
+   	  MIN[i] ~ normal(MIN[i-1],10);
+      SED1[i] ~ normal(SED1[i-1],10);
+      SED2[i] ~ normal(SED2[i-1],10);
+   } 
   }
-
   for(i in 1:N_obs) {
-   //NEP[ii_obs[i]] ~ normal(100,1);
-   //MIN[ii_obs[i]] ~ normal(3000,100);
-   //SED1[ii_obs[i]] ~ normal(3000,100);
-   //SED2[ii_obs[i]] ~ normal(3000,100);
    DO_obs_epi[i] ~ normal(DO_epi[ii_obs[i]], 10); // error in "i", sigma of 1 way too low
    DO_obs_hyp[i] ~ normal(DO_hyp[ii_obs[i]], 10); // error in "i", sigma of 1 way too low
   }
 
   for(i in 1:N_obs_mix) {
-   // NEP[ii_obs_mix[i]] ~ normal(100,1);
-   // MIN[ii_obs_mix[i]] ~ normal(3000,100);
-   // SED1[ii_obs_mix[i]] ~ normal(3000,100);
    DO_obs_tot[i] ~ normal(DO_tot[ii_obs_mix[i]], 10); // error in "i", sigma of 1 way too low
   }
 
@@ -276,14 +277,16 @@ generated quantities {
   Fentrain_hyp[1] = 0;
   for (i in 2:d){
     Ftotepi2[i] = (DO_epi[i-1] + flux_epi[i]) * volume_epi[i-1]/volume_epi[i];
-    Ftotepi[i] = NEP[i-1] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] -
-    SED1[i-1] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1] +
-    k600[i-1] * (o2sat[d-1] - DO_epi[i-1])/tddepth[i-1];
-    Fnep[i] = NEP[i-1] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i];
-    Fsed1[i] = -SED1[i-1] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1];
-    Fatm[i] = k600[i-1] * (o2sat[d-1] - DO_epi[i-1])/tddepth[i-1];
-    Fmin[i] =  - MIN[i-1] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i];
-    Fsed2[i] = -SED2[i-1] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1];
+    Ftotepi[i] = NEP[i_Param[i]] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] -
+    SED1[i_Param[i]] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1] +
+    k600[i-1] * (o2sat[i-1] - DO_epi[i-1]) * area_epi[i-1]/volume_epi[i-1];
+    // k600[i-1] * (o2sat[i-1] - DO_epi[i-1])/tddepth[i-1];
+    Fnep[i] = NEP[i_Param[d]] * (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i];
+    Fsed1[i] = -SED1[i_Param[i]] *  (DO_epi[i-1]/(khalf + DO_epi[i-1])) * theta1[i] * area_epi[i-1]/volume_epi[i-1]; 
+    // Fatm[i] = k600[i-1] * (o2sat[i-1] - DO_epi[i-1])/tddepth[i-1];
+    Fatm[i] = k600[i-1] * (o2sat[i-1] - DO_epi[i-1]) * area_epi[i-1]/volume_epi[i-1];
+    Fmin[i] =  - MIN[i_Param[i]] * (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i];
+    Fsed2[i] = -SED2[i_Param[i]] *  (DO_hyp[i-1]/(khalf + DO_hyp[i-1])) * theta2[i] * area_hyp[i-1]/volume_hyp[i-1];
     Fentrain_epi[i] = delvol_epi[i] * x_do1[i];
     Fentrain_hyp[i] = delvol_hyp[i] * x_do2[i];
   }
