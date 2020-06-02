@@ -7,7 +7,7 @@ library(tidyverse)
 
 oneyear <- 2008
 twoyear <- 2007:2008
-fiveyear <- 2000:2014
+fiveyear <- 2000:2001
 
 input <- readr::read_csv(
   'inst/extdata/input.txt',
@@ -173,6 +173,8 @@ dummyinput$N_obs_mix = length(idx)
 
 fit <- stan(file = 'src/odem.stan', data = dummyinput, chains = 1, iter = 500,control=list(adapt_delta = 0.8))
 
+fit@stanmodel@dso <- new("cxxdso")
+saveRDS(fit, file = "fit.rds")
 # an example of extracting parameters for this particular dummy model, i'm
 # geting an overestimate of lambda and consequently a much faster modeled drop
 # than actual drop in "DO". As an exercise (entirely optional), you might find
@@ -239,7 +241,7 @@ ggplot(DO_epi, aes(x=day, y=mean)) + geom_line(col = 'red') +
   geom_ribbon(data = DO_hyp, aes(ymin=mean-1.96*sd, ymax=mean+1.96*sd), alpha=0.2) +
   geom_point(data=simdata, aes(x=day, y=DO_obs_hyp),col ='green') +
   geom_point(data=simdata, aes(x=day, y=DO_obs_tot),col ='blue') +
-  ylim(c(0,20000))
+  ylim(c(0,20000)) + theme_minimal()
 
 Ftotepi <- rstan::extract(fit, permuted = TRUE, inc_warmup=FALSE)$Ftotepi %>%
   as_tibble() %>%
