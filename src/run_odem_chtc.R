@@ -1,20 +1,18 @@
 cat('\f')
 rm(list= ls())
 
-setwd('/Users/paul/Dropbox/Hanson/MyModels/ODEMPCH/odem-bayes-ideas-threelayer')
+# setwd('/Users/paul/Dropbox/Hanson/MyModels/ODEMPCH/odem-bayes-ideas-threelayer')
 
 library(tidyverse)
 
 oneyear <- 2008
 twoyear <- 2007:2008
-fiveyear <- 2000:2001
+fiveyear <- 1979:2018
 
 input <- readr::read_csv(
   'inst/extdata/input.txt',
   col_names=c('datetime', 'thermocline_depth', 'temperature_epi', 'temperature_hypo', 'temperature_total', 'volume_total', 'volume_epi', 'volume_hypo', 'area_thermocline', 'area_surface', 'year', 'day_of_year', 'wind'),
   col_types=cols(datetime=col_datetime(), year=col_integer(), day_of_year=col_integer(), .default=col_double()))
-in1yr <- filter(input, year %in% oneyear)
-in2yr <- filter(input, year %in% twoyear)
 in5yr <- filter(input, year %in% fiveyear)
 
 
@@ -30,9 +28,9 @@ obs <- read.table(
   setNames(., nm=c('dateint', 'DO_tot', 'DO_epi', 'DO_hypo')) %>%
   mutate(date = zoo::as.Date(dateint, origin='1979-04-01')) %>% # just guessing at origin and therefore at dates
   select(date, everything())
-obs1yr <- filter(obs, lubridate::year(date) %in% oneyear)
-obs2yr <- filter(obs, lubridate::year(date) %in% twoyear)
 obs5yr <- filter(obs, lubridate::year(date) %in% fiveyear)
+
+# obs5year <- obs5yr[((round(nrow(obs5yr) * 1/3))) : nrow(obs5yr) ,]
 
 
 #

@@ -1,0 +1,23 @@
+universe = vanilla
+log = test-rstan_$(Cluster).log
+error = test-rstan_$(Cluster)_$(Process).err
+
+executable = run_R.sh
+arguments = $(Process)
+output = test-rstan_$(Cluster)_$(Process).out
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files = http://proxy.chtc.wisc.edu/SQUID/chtc/R361.tar.gz,rstan.tar.gz, odem.stan,run_odem_chtc_latest.R,input.txt,observed.txt,Makevars
+
+getenv = true
+# Requirement for accessing new set of modules
+requirements = ( HasChtcSoftware == true )
+
+# Tell HTCondor what amount of compute resources
+#  each job will need on the computer where it runs.
+request_cpus = 8
+request_memory = 10GB
+request_disk = 10GB
+
+queue 1
